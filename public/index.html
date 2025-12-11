@@ -1,0 +1,1302 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seguimiento de Progreso del IB</title>
+    <!-- Carga de Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configuración de la fuente Inter -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+            transition: background-color 0.3s;
+        }
+        /* Definición de la paleta oscura en el nivel superior */
+        .dark body {
+            background-color: #1a202c; /* dark gray */
+        }
+
+        .card {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+        }
+        .dark .card {
+            box-shadow: 0 4px 6px -1px rgba(255, 255, 255, 0.05), 0 2px 4px -2px rgba(255, 255, 255, 0.03);
+        }
+        
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Estilos específicos para los semáforos */
+        .traffic-light {
+            width: 1rem;
+            height: 1rem;
+            border-radius: 50%;
+            display: inline-block;
+            transition: background-color 0.3s;
+        }
+        .bg-red-400 { background-color: #f87171; }
+        .bg-yellow-400 { background-color: #facc15; }
+        .bg-green-400 { background-color: #4ade80; }
+
+        /* Estilo para elementos deshabilitados en modo invitado */
+        .guest-disabled {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        /* Estilos para el Modal */
+        .modal-overlay {
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 100;
+        }
+        .modal-content {
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app" class="min-h-screen p-4 md:p-8">
+
+        <!-- Pantalla de Login (Inicialmente visible) -->
+        <div id="login-screen" class="flex items-center justify-center min-h-screen">
+            <div class="bg-white dark:bg-gray-800 p-8 rounded-xl card max-w-sm w-full text-center transition-colors duration-300">
+                <h2 class="text-3xl font-extrabold text-blue-800 dark:text-blue-400 mb-4">IB Tracker</h2>
+                <p class="text-gray-600 dark:text-gray-300 mb-6">Inicia sesión para gestionar el progreso de tus hijos.</p>
+                <div class="space-y-4">
+                    <button id="google-signin-btn" class="w-full bg-blue-600 text-white p-3 rounded-xl font-semibold hover:bg-blue-700 transition duration-150 flex items-center justify-center">
+                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 4.417c2.44 0 4.38.824 5.864 2.308l2.645-2.645C18.252 2.324 15.353 1 12 1 7.271 1 3.197 3.659 1 7.424l3.52 2.738C5.232 6.55 8.358 4.417 12 4.417z" clip-rule="evenodd" fill-rule="evenodd"/>
+                            <path d="M12 21.083c-2.43 0-4.37-.824-5.854-2.308l-3.52 2.738C5.748 22.324 8.647 23 12 23c4.729 0 8.803-2.659 10.966-6.424l-3.52-2.738c-1.258 2.215-4.384 3.348-7.446 3.348z" clip-rule="evenodd" fill-rule="evenodd"/>
+                            <path d="M23 12c0-1.79-1.39-3.95-3.32-5.46l-2.645 2.645C17.39 10.51 17.5 11.23 17.5 12s-.11.66-.465 1.055l2.645 2.645C21.61 15.95 23 13.79 23 12z" clip-rule="evenodd" fill-rule="evenodd"/>
+                            <path d="M12 17.5c-3.14 0-5.71-2.57-5.71-5.71 0-.77.11-1.49.465-2.11L4.05 7.03C2.11 8.54 1 10.71 1 12c0 5.09 4.19 9.17 9.17 9.17H12v-3.32z" clip-rule="evenodd" fill-rule="evenodd"/>
+                        </svg>
+                        Continuar con Google
+                    </button>
+                    <button id="guest-signin-btn" class="w-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-100 p-3 rounded-xl font-semibold hover:bg-gray-200 dark:hover:bg-gray-600 transition duration-150">
+                        Continuar como Invitado (Solo Lectura)
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pantalla Principal (Inicialmente oculta) -->
+        <div id="main-content" class="hidden">
+            <header class="text-center mb-8 flex flex-col md:flex-row justify-between items-center">
+                <div>
+                    <h1 class="text-4xl font-extrabold text-blue-800 dark:text-blue-400">🚀 Seguimiento de Progreso IB</h1>
+                    <p class="text-lg text-gray-600 dark:text-gray-300 mt-2">
+                        Gestionando el progreso de: <span id="current-student-name" class="font-bold text-indigo-500 dark:text-indigo-300"></span>
+                        <span id="guest-indicator" class="text-sm font-semibold bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-gray-100 px-2 py-1 rounded-full hidden">INVITADO (Solo Lectura)</span>
+                    </p>
+                </div>
+                <div class="flex flex-wrap justify-center items-center space-x-3 mt-4 md:mt-0">
+                    <!-- Switch Modo Oscuro/Claro (NUEVO) -->
+                    <button id="mode-toggle-btn" class="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-100 px-4 py-2 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition duration-150 text-sm font-semibold shrink-0">
+                        Modo ☀️
+                    </button>
+                    <!-- Botón para Editar Perfil -->
+                    <button id="edit-profile-btn" class="bg-yellow-500 text-white px-4 py-2 rounded-xl hover:bg-yellow-600 transition duration-150 text-sm font-semibold shrink-0">
+                        Estilo de Aprendizaje: <span id="profile-style-indicator">L/E</span>
+                    </button>
+                    <!-- Selector de Estudiante -->
+                    <select id="student-selector" class="p-2 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 dark:text-gray-100 min-w-32"></select>
+                    <!-- Botón de Logout -->
+                    <button id="logout-btn" class="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-100 px-4 py-2 rounded-xl hover:bg-gray-300 dark:hover:bg-gray-600 transition duration-150 text-sm shrink-0">
+                        Salir
+                    </button>
+                </div>
+            </header>
+
+            <!-- Contenedor Principal: Se adapta a una sola columna en móvil y a 3 columnas en escritorio -->
+            <main class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                <!-- Columna 1: Asignaturas y Notas -->
+                <section class="lg:col-span-2 space-y-6">
+                    <div id="subject-grades" class="card bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
+                        <h2 class="text-2xl font-bold text-gray-700 dark:text-gray-100 mb-4 flex items-center">
+                            <svg class="w-6 h-6 mr-2 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.832 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5s3.332.477 4.5 1.253v13C19.832 18.477 18.168 18 16.5 18s-3.332.477-4.5 1.253"></path></svg>
+                            Asignaturas, Notas y Semáforo General
+                        </h2>
+                        <div id="subjects-list" class="space-y-3">
+                            <!-- Las asignaturas se renderizarán aquí -->
+                        </div>
+                    </div>
+
+                    <!-- Sección para el Plan de Estudio generado (Despliegue de Temas) -->
+                    <div id="study-plan-output" class="card bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 hidden">
+                        <h2 class="text-2xl font-bold text-gray-700 dark:text-gray-100 mb-4 flex items-center">
+                            <svg class="w-6 h-6 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            Temario: <span id="current-subject-title" class="font-normal text-blue-500 dark:text-blue-300"></span>
+                        </h2>
+                        <div id="plan-loading" class="flex items-center justify-center hidden p-8">
+                            <div class="loading-spinner mr-3"></div>
+                            <span class="text-gray-600 dark:text-gray-300 font-medium">Generando temario del currículo...</span>
+                        </div>
+                        
+                        <div id="plan-content" class="space-y-4">
+                            <!-- Temas interactivos se renderizarán aquí -->
+                        </div>
+
+                        <div id="plan-sources" class="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                            <!-- Fuentes (Citas) se renderizarán aquí -->
+                        </div>
+                    </div>
+
+                    <!-- Seccion CAS -->
+                    <div id="cas-tracker" class="card bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
+                        <h2 class="text-2xl font-bold text-gray-700 dark:text-gray-100 mb-4 flex items-center">
+                            <svg class="w-6 h-6 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            Creatividad, Actividad, Servicio (CAS)
+                        </h2>
+                        <div id="cas-projects-list" class="space-y-3 mb-4">
+                            <!-- Proyectos CAS se renderizarán aquí -->
+                        </div>
+                        <form id="add-cas-form" class="flex flex-col sm:flex-row gap-2">
+                            <input type="text" id="cas-name" placeholder="Nombre del Proyecto" class="flex-grow p-2 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-green-500 focus:border-green-500 dark:bg-gray-700 dark:text-gray-100" required>
+                            <select id="cas-area" class="p-2 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-green-500 focus:border-green-500 dark:bg-gray-700 dark:text-gray-100">
+                                <option value="Creatividad">Creatividad</option>
+                                <option value="Actividad">Actividad</option>
+                                <option value="Servicio">Servicio</option>
+                            </select>
+                            <button type="submit" class="bg-green-600 text-white p-3 rounded-xl hover:bg-green-700 transition duration-150 shrink-0">
+                                Añadir Proyecto
+                            </button>
+                        </form>
+                    </div>
+                </section>
+
+                <!-- Columna 2: EE y ToK (IB Core) -->
+                <section class="lg:col-span-1 space-y-6">
+                    <!-- Seccion EE -->
+                    <div id="ee-tracker" class="card bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
+                        <h2 class="text-2xl font-bold text-gray-700 dark:text-gray-100 mb-4 flex items-center">
+                            <svg class="w-6 h-6 mr-2 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                            Monografía (EE)
+                        </h2 >
+                        <div class="space-y-4">
+                            <label class="block text-gray-600 dark:text-gray-300 font-medium">Estado General:</label>
+                            <select id="ee-status" class="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-red-500 focus:border-red-500 dark:bg-gray-700 dark:text-gray-100" onchange="updateCoreStatus('eeStatus', this.value)">
+                                <option value="No Iniciada">No Iniciada</option>
+                                <option value="Definiendo Tema">Definiendo Tema</option>
+                                <option value="Escribiendo Borrador">Escribiendo Borrador</option>
+                                <option value="Entregada (Final)">Entregada (Final)</option>
+                                <option value="Evaluada">Evaluada</option>
+                            </select>
+                            <div id="ee-grade-display" class="mt-4 p-3 bg-gray-100 dark:bg-gray-700 rounded-xl hidden">
+                                <label class="block text-gray-600 dark:text-gray-300 font-medium">Calificación (A-E):</label>
+                                <select id="ee-grade" class="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-xl mt-1 dark:bg-gray-700 dark:text-gray-100" onchange="updateCoreStatus('eeGrade', this.value)">
+                                    <option value="N/A">N/A</option>
+                                    <option value="A">A (Excelente)</option>
+                                    <option value="B">B (Bueno)</option>
+                                    <option value="C">C (Satisfactorio)</option>
+                                    <option value="D">D (Elemental)</option>
+                                    <option value="E">E (Insuficiente)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Seccion ToK -->
+                    <div id="tok-tracker" class="card bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
+                        <h2 class="text-2xl font-bold text-gray-700 dark:text-gray-100 mb-4 flex items-center">
+                            <svg class="w-6 h-6 mr-2 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M19 12h1M5 12H4M15.364 18.364l-.707-.707M6.343 5.636l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                            Teoría del Conocimiento (ToK)
+                        </h2>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-gray-600 dark:text-gray-300 font-medium mb-1">Ensayo ToK:</label>
+                                <select id="tok-essay-status" class="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-yellow-500 focus:border-yellow-500 dark:bg-gray-700 dark:text-gray-100" onchange="updateCoreStatus('tokEssay', this.value)">
+                                    <option value="Pendiente">Pendiente</option>
+                                    <option value="Borrador 1">Borrador 1</option>
+                                    <option value="Entregado">Entregado</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-gray-600 dark:text-gray-300 font-medium mb-1">Exposición ToK:</label>
+                                <select id="tok-presentation-status" class="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-yellow-500 focus:border-yellow-500 dark:bg-gray-700 dark:text-gray-100" onchange="updateCoreStatus('tokPresentation', this.value)">
+                                    <option value="Pendiente">Pendiente</option>
+                                    <option value="Planificando">Planificando</option>
+                                    <option value="Completada">Completada</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Resumen de Puntos de Core (EE + ToK) -->
+                    <div id="core-points-summary" class="card bg-indigo-600 text-white p-6 rounded-xl">
+                        <h3 class="text-xl font-bold mb-2">Puntos del "Core" (EE + ToK)</h3>
+                        <p class="text-3xl font-extrabold" id="core-points">Puntos: 0/3</p>
+                        <p class="text-sm mt-2 opacity-80" id="core-points-info">Combinación actual: (EE: N/A, ToK: N/A)</p>
+                    </div>
+
+                </section>
+            </main>
+        </div>
+        
+        <!-- Mensajes de Estado (Error/Éxito) -->
+        <div id="message-box" class="fixed bottom-4 right-4 p-3 rounded-xl text-white hidden transition-opacity duration-300"></div>
+
+    </div>
+
+    <!-- MODAL DE PERFIL DE APRENDIZAJE (VARK) -->
+    <div id="profile-modal" class="fixed inset-0 flex items-center justify-center modal-overlay hidden">
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-xl card w-full max-w-lg modal-content transition-colors duration-300">
+            <h3 class="text-2xl font-bold text-blue-800 dark:text-blue-400 mb-4">🧠 Configurar Estilo de Aprendizaje VARK</h3>
+            <div id="vark-questions" class="space-y-4">
+                <!-- Las preguntas se inyectarán aquí -->
+            </div>
+            <div id="profile-interests-section" class="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <label for="interests-input" class="block text-gray-700 dark:text-gray-100 font-semibold mb-2">Aficiones e Intereses (Separados por coma):</label>
+                <textarea id="interests-input" rows="2" placeholder="Ej: Fútbol, Programación, Música, Historia antigua" class="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100"></textarea>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Esto ayuda a la IA a contextualizar los ejercicios de repaso.</p>
+            </div>
+            <div class="flex justify-end space-x-3 mt-6">
+                <button id="cancel-profile-btn" class="bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-gray-100 p-3 rounded-xl hover:bg-gray-400 dark:hover:bg-gray-600">Cancelar</button>
+                <button id="save-profile-btn" class="bg-indigo-600 text-white p-3 rounded-xl hover:bg-indigo-700">Guardar Perfil</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, onSnapshot, setLogLevel, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Configuración global (Proporcionada por el entorno Canvas)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        
+        const GUEST_STUDENT_ID = 'guest_ib_tracker'; // ID público fijo para el modo invitado
+        
+        let db, auth;
+        let currentUserId = null;
+        let currentStudentId = null; 
+        let allStudents = []; 
+        let isGuestMode = false;
+        let currentStudentProfile = null; // Almacena el perfil de aprendizaje del estudiante seleccionado
+
+        // Base de Datos: Ahora usamos colecciones separadas para el usuario y el progreso del estudiante.
+        const studentsCollectionRef = (userId) => collection(db, 'artifacts', appId, 'users', userId, 'students');
+        const progressDocRef = (studentId) => doc(db, 'artifacts', appId, 'public', 'data', 'progress', studentId); 
+        const usersDocRef = (userId) => doc(db, 'artifacts', appId, 'users', userId);
+
+        // --- Datos del Cuestionario VARK Simplificado ---
+        const STYLES_MAP = {
+            'V': 'Visual',
+            'A': 'Auditivo',
+            'L/E': 'L/E',
+            'K': 'Kinestésico'
+        };
+
+        const VARK_QUESTIONS = [
+            {
+                text: "¿Cuando tienes que aprender un concepto nuevo, prefieres...?",
+                options: [
+                    { label: "Ver videos, diagramas o gráficos que lo expliquen.", style: 'V' },
+                    { label: "Que alguien te lo explique verbalmente o escuchar un podcast/grabación.", style: 'A' },
+                    { label: "Leer el libro de texto o la guía y tomar notas detalladas.", style: 'L/E' },
+                    { label: "Hacer una práctica, experimento o simulación.", style: 'K' }
+                ]
+            },
+            {
+                text: "¿En un examen, las instrucciones más fáciles de seguir son las...?",
+                options: [
+                    { label: "Escritas con viñetas y buena organización espacial.", style: 'L/E' },
+                    { label: "Demostradas por el profesor o con un diagrama de flujo.", style: 'V' },
+                    { label: "Que te leen en voz alta o te explican paso a paso.", style: 'A' },
+                    { label: "Que te obligan a resolver un problema o usar tus manos.", style: 'K' }
+                ]
+            },
+            {
+                text: "¿Para recordar el camino a un lugar, sueles...?",
+                options: [
+                    { label: "Visualizar el mapa o los puntos de referencia.", style: 'V' },
+                    { label: "Repetir las instrucciones en voz baja.", style: 'A' },
+                    { label: "Escribir los nombres de las calles en orden.", style: 'L/E' },
+                    { label: "Recordar las sensaciones de girar y caminar/conducir.", style: 'K' }
+                ]
+            },
+            {
+                text: "¿Qué haces cuando te encuentras con una palabra desconocida en un texto?",
+                options: [
+                    { label: "La buscas en un diccionario (para ver la definición escrita).", style: 'L/E' },
+                    { label: "Intentas imaginar el objeto, la acción o una imagen relacionada.", style: 'V' },
+                    { label: "La pronuncias en voz alta para escucharla.", style: 'A' },
+                    { label: "Escribes frases usándola para sentir el significado.", style: 'K' }
+                ]
+            },
+            {
+                text: "¿Prefieres que un profesor utilice...?",
+                options: [
+                    { label: "PowerPoints con muchos gráficos, imágenes y videos.", style: 'V' },
+                    { label: "Debates en clase y preguntas abiertas.", style: 'A' },
+                    { label: "Guías de estudio impresas y libros de lectura obligatoria.", style: 'L/E' },
+                    { label: "Laboratorios, ejercicios de role-playing o actividades de campo.", style: 'K' }
+                ]
+            },
+            {
+                text: "¿Si tienes que dar una presentación sobre un tema IB, planeas...?",
+                options: [
+                    { label: "Hacer un esquema detallado y leer la mayoría de los puntos.", style: 'L/E' },
+                    { label: "Usar muchas imágenes, diagramas y diapositivas limpias.", style: 'V' },
+                    { label: "Practicar el discurso varias veces y hablar sin muchas notas.", style: 'A' },
+                    { label: "Diseñar una actividad para que la audiencia participe.", style: 'K' }
+                ]
+            }
+        ];
+        
+        // Asignaturas por defecto
+        const DEFAULT_SUBJECTS = [
+            { name: "Matemáticas AA", grade: null, level: "HL", syllabus: [] },
+            { name: "Física", grade: null, level: "HL", syllabus: [] },
+            { name: "Español A", grade: null, level: "HL", syllabus: [] },
+            { name: "Historia", grade: null, level: "SL", syllabus: [] },
+            { name: "Biología", grade: null, level: "SL", syllabus: [] },
+            { name: "Inglés B", grade: null, level: "SL", syllabus: [] },
+        ];
+
+        // Perfil por defecto
+        const DEFAULT_PROFILE = {
+            preferredStyle: "L/E", 
+            interests: ["Estudio", "Cine"], 
+        };
+        
+        const CORE_POINTS_MATRIX = {
+            'A': { 'A': 3, 'B': 3, 'C': 2, 'D': 2, 'E': 0, 'N/A': 0 },
+            'B': { 'A': 3, 'B': 2, 'C': 2, 'D': 1, 'E': 0, 'N/A': 0 },
+            'C': { 'A': 2, 'B': 2, 'C': 1, 'D': 1, 'E': 0, 'N/A': 0 },
+            'D': { 'A': 2, 'B': 1, 'C': 1, 'D': 0, 'E': 0, 'N/A': 0 },
+            'E': { 'A': 0, 'B': 0, 'C': 0, 'D': 0, 'E': 0, 'N/A': 0 },
+            'N/A': { 'A': 0, 'B': 0, 'C': 0, 'D': 0, 'E': 0, 'N/A': 0 }
+        };
+
+        const TRAFFIC_LIGHTS = {
+            'red': { class: 'bg-red-400', label: 'Rojo (Repasar Urgente)', value: 1 },
+            'yellow': { class: 'bg-yellow-400', label: 'Amarillo (Repaso Parcial)', value: 2 },
+            'green': { class: 'bg-green-400', label: 'Verde (Dominio Total)', value: 3 },
+            'default': { class: 'bg-gray-300', label: 'Sin evaluar', value: 0 }
+        };
+
+        let currentSubjectIndex = -1; 
+        
+        // --- Lógica de Modo Oscuro/Claro (NUEVA) ---
+        function setDarkMode(isDark) {
+            if (isDark) {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+                document.getElementById('mode-toggle-btn').innerHTML = 'Modo 🌙';
+            } else {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+                document.getElementById('mode-toggle-btn').innerHTML = 'Modo ☀️';
+            }
+        }
+
+        function toggleDarkMode() {
+            const isDark = document.documentElement.classList.contains('dark');
+            setDarkMode(!isDark);
+        }
+
+        function initializeTheme() {
+            // 1. Verificar preferencia de localStorage
+            const storedTheme = localStorage.getItem('theme');
+            // 2. Verificar preferencia del sistema (si no hay preferencia guardada)
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            
+            if (storedTheme === 'dark' || (!storedTheme && prefersDark)) {
+                setDarkMode(true);
+            } else {
+                setDarkMode(false);
+            }
+        }
+        
+        // Función para mostrar mensajes de estado
+        function showMessage(text, isError = false) {
+            const box = document.getElementById('message-box');
+            box.textContent = text;
+            // Clases para el modo oscuro
+            const baseClass = isError ? 'bg-red-500' : 'bg-blue-500';
+            box.className = `fixed bottom-4 right-4 p-3 rounded-xl text-white opacity-100 transition-opacity duration-300 ${baseClass}`;
+            box.style.display = 'block';
+            setTimeout(() => {
+                box.classList.remove('opacity-100');
+                box.classList.add('opacity-0');
+                setTimeout(() => box.style.display = 'none', 300);
+            }, 3000);
+        }
+
+        // --- Lógica de Inicialización ---
+
+        async function initializeFirebase() {
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                setLogLevel('error'); 
+
+                initializeTheme(); // Inicializar el tema antes de la UI
+
+                document.getElementById('google-signin-btn').addEventListener('click', signInWithGoogle);
+                document.getElementById('guest-signin-btn').addEventListener('click', signInAsGuest);
+                document.getElementById('logout-btn').addEventListener('click', handleSignOut);
+                document.getElementById('edit-profile-btn').addEventListener('click', showEditProfileModal);
+                document.getElementById('cancel-profile-btn').addEventListener('click', hideEditProfileModal);
+                document.getElementById('save-profile-btn').addEventListener('click', handleProfileSave);
+                document.getElementById('mode-toggle-btn').addEventListener('click', toggleDarkMode); // Nuevo handler
+
+
+                // Listener de cambio de estado de autenticación
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        currentUserId = user.uid;
+                        if (user.isAnonymous && isGuestMode) {
+                            handleGuestLogin();
+                        } else {
+                            handleSuccessfulLogin(user);
+                        }
+                    } else {
+                        currentUserId = null;
+                        isGuestMode = false;
+                        showLoginScreen();
+                    }
+                });
+            } catch (error) {
+                console.error("Error al inicializar Firebase:", error);
+                showMessage(`Error al iniciar la aplicación: ${error.message}`, true);
+            }
+        }
+
+        // --- Lógica de Autenticación y Perfiles ---
+
+        function showLoginScreen() {
+            document.getElementById('login-screen').classList.remove('hidden');
+            document.getElementById('main-content').classList.add('hidden');
+            document.getElementById('guest-indicator').classList.add('hidden');
+        }
+
+        function showMainScreen() {
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('main-content').classList.remove('hidden');
+        }
+        
+        async function signInAsGuest() {
+            try {
+                await signInAnonymously(auth); 
+                isGuestMode = true; 
+            } catch (error) {
+                console.error("Error signing in as guest:", error);
+                showMessage("Fallo al iniciar como Invitado.", true);
+            }
+        }
+
+        function handleGuestLogin() {
+            isGuestMode = true;
+            currentStudentId = GUEST_STUDENT_ID;
+            currentStudentProfile = DEFAULT_PROFILE;
+            document.getElementById('current-student-name').textContent = 'Perfil de Muestra';
+            document.getElementById('guest-indicator').classList.remove('hidden');
+            document.getElementById('student-selector').classList.add('guest-disabled');
+            document.getElementById('logout-btn').textContent = 'Salir de Invitado';
+            document.getElementById('profile-style-indicator').textContent = currentStudentProfile.preferredStyle; // Actualiza el indicador
+
+            showMainScreen();
+            setupDataListener();
+            applyGuestRestrictions();
+        }
+
+        function applyGuestRestrictions() {
+            document.querySelectorAll('input, select, textarea, button:not(#logout-btn):not(#mode-toggle-btn)').forEach(el => {
+                if (el.id !== 'student-selector') {
+                    el.classList.add('guest-disabled');
+                }
+            });
+            showMessage("Modo Invitado: Los cambios no se guardarán en este perfil.");
+        }
+
+        async function signInWithGoogle() {
+            const provider = new GoogleAuthProvider();
+            try {
+                const result = await signInWithPopup(auth, provider);
+            } catch (error) {
+                console.error("Error de autenticación con Google:", error);
+                showMessage("Fallo en la autenticación con Google.", true);
+            }
+        }
+
+        async function handleSignOut() {
+            try {
+                await signOut(auth);
+                currentStudentId = null;
+                allStudents = [];
+                isGuestMode = false;
+                document.querySelectorAll('.guest-disabled').forEach(el => el.classList.remove('guest-disabled'));
+                showMessage("Sesión cerrada correctamente.");
+            } catch (error) {
+                console.error("Error al cerrar sesión:", error);
+            }
+        }
+
+        async function handleSuccessfulLogin(user) {
+            isGuestMode = false;
+            document.getElementById('logout-btn').textContent = 'Salir';
+            document.getElementById('guest-indicator').classList.add('hidden');
+            document.getElementById('student-selector').classList.remove('guest-disabled');
+
+            await setDoc(usersDocRef(user.uid), { 
+                email: user.email, 
+                displayName: user.displayName,
+                lastLogin: new Date().toISOString()
+            }, { merge: true });
+
+            await loadStudents(user.uid);
+            
+            if (allStudents.length > 0) {
+                currentStudentId = allStudents[0].id;
+                const student = allStudents[0];
+
+                if (!student.learningProfile) {
+                    await setStudentProfile(currentUserId, currentStudentId, DEFAULT_PROFILE);
+                    await loadStudents(user.uid); // Recargar
+                }
+                currentStudentProfile = student.learningProfile || DEFAULT_PROFILE;
+                document.getElementById('current-student-name').textContent = student.name;
+                document.getElementById('profile-style-indicator').textContent = currentStudentProfile.preferredStyle; // Actualiza el indicador
+                setupDataListener(); 
+            } else {
+                const newStudentId = crypto.randomUUID();
+                const studentData = { 
+                    name: "Hijo 1", 
+                    ownerId: user.uid, 
+                    createdAt: new Date().toISOString(),
+                    learningProfile: DEFAULT_PROFILE 
+                };
+                await setDoc(doc(studentsCollectionRef(user.uid), newStudentId), studentData);
+                
+                await loadStudents(user.uid);
+                currentStudentId = allStudents[0].id;
+                currentStudentProfile = allStudents[0].learningProfile || DEFAULT_PROFILE;
+                document.getElementById('current-student-name').textContent = allStudents[0].name;
+                document.getElementById('profile-style-indicator').textContent = currentStudentProfile.preferredStyle; 
+                setupDataListener();
+            }
+
+            showMainScreen();
+        }
+
+        async function setStudentProfile(userId, studentId, profile) {
+            if (isGuestMode) return;
+            const studentDocRef = doc(studentsCollectionRef(userId), studentId);
+            try {
+                await setDoc(studentDocRef, { learningProfile: profile }, { merge: true });
+                currentStudentProfile = profile;
+                document.getElementById('profile-style-indicator').textContent = currentStudentProfile.preferredStyle; // Actualiza el indicador
+                showMessage("Perfil de aprendizaje guardado.");
+            } catch (error) {
+                console.error("Error saving student profile:", error);
+                showMessage("Error al guardar el perfil de aprendizaje.", true);
+            }
+        }
+
+
+        // Carga y renderiza el selector de estudiantes
+        async function loadStudents(userId) {
+            const studentSelector = document.getElementById('student-selector');
+            studentSelector.innerHTML = '';
+            
+            try {
+                const snapshot = await getDocs(studentsCollectionRef(userId));
+                allStudents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                allStudents.forEach(student => {
+                    const option = document.createElement('option');
+                    option.value = student.id;
+                    option.textContent = student.name;
+                    studentSelector.appendChild(option);
+                });
+
+                studentSelector.onchange = (e) => switchStudent(e.target.value);
+
+            } catch(e) {
+                console.error("Error al cargar estudiantes:", e);
+                showMessage("Error al cargar la lista de estudiantes.", true);
+            }
+        }
+
+        function switchStudent(newStudentId) {
+            if (isGuestMode) return; 
+
+            currentStudentId = newStudentId;
+            const student = allStudents.find(s => s.id === newStudentId);
+            
+            currentStudentProfile = student.learningProfile || DEFAULT_PROFILE; 
+            document.getElementById('profile-style-indicator').textContent = currentStudentProfile.preferredStyle; 
+
+            document.getElementById('current-student-name').textContent = student ? student.name : 'Desconocido';
+            setupDataListener(); 
+            showMessage(`Cambiando la vista al progreso de ${student.name}.`);
+        }
+        
+        // --- Lógica del Modal VARK ---
+        function showEditProfileModal() {
+            if (isGuestMode) { showMessage("Error: Edición de perfil deshabilitada en modo invitado.", true); return; }
+            
+            const profile = currentStudentProfile || DEFAULT_PROFILE;
+            const questionsContainer = document.getElementById('vark-questions');
+            const interestsInput = document.getElementById('interests-input');
+            
+            questionsContainer.innerHTML = ''; // Limpia preguntas anteriores
+            
+            VARK_QUESTIONS.forEach((q, qIndex) => {
+                const questionDiv = document.createElement('div');
+                // Asegurar que las clases de fondo y texto funcionen en modo oscuro
+                questionDiv.className = 'p-3 border border-gray-100 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-700'; 
+                questionDiv.innerHTML = `<p class="font-semibold text-gray-700 dark:text-gray-100 mb-2">P${qIndex + 1}: ${q.text}</p>`;
+                
+                q.options.forEach((opt, optIndex) => {
+                    const radioId = `q${qIndex}-opt${optIndex}`;
+                    const label = document.createElement('label');
+                    // Hover en modo oscuro
+                    label.className = 'flex items-center space-x-2 text-sm cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-800 p-2 rounded-xl'; 
+                    label.innerHTML = `
+                        <input type="radio" name="q${qIndex}" value="${opt.style}" class="text-blue-500 focus:ring-blue-500">
+                        <span class="dark:text-gray-200">${opt.label}</span>
+                    `;
+                    questionDiv.appendChild(label);
+                });
+                questionsContainer.appendChild(questionDiv);
+            });
+
+            // Precarga de intereses
+            interestsInput.value = (profile.interests || []).join(', ');
+
+            document.getElementById('profile-modal').classList.remove('hidden');
+        }
+
+        function hideEditProfileModal() {
+            document.getElementById('profile-modal').classList.add('hidden');
+        }
+        
+        function handleProfileSave() {
+            const scores = { 'V': 0, 'A': 0, 'L/E': 0, 'K': 0 };
+            let answeredCount = 0;
+
+            // 1. Contar los resultados del cuestionario
+            VARK_QUESTIONS.forEach((q, qIndex) => {
+                const radios = document.getElementsByName(`q${qIndex}`);
+                for (let i = 0; i < radios.length; i++) {
+                    if (radios[i].checked) {
+                        scores[radios[i].value]++;
+                        answeredCount++;
+                        break;
+                    }
+                }
+            });
+
+            if (answeredCount !== VARK_QUESTIONS.length) {
+                showMessage("Por favor, responde todas las preguntas del cuestionario.", true);
+                return;
+            }
+
+            // 2. Determinar el estilo predominante
+            let maxScore = -1;
+            let preferredStyle = DEFAULT_PROFILE.preferredStyle; // Fallback
+            
+            // Encuentra el estilo con la puntuación más alta
+            for (const style in scores) {
+                if (scores[style] > maxScore) {
+                    maxScore = scores[style];
+                    preferredStyle = style;
+                }
+            }
+            
+            // 3. Obtener intereses
+            const interestsString = document.getElementById('interests-input').value;
+            const interestsArray = interestsString.split(',').map(i => i.trim()).filter(i => i.length > 0);
+
+            // 4. Crear y guardar el nuevo perfil
+            const newProfile = { preferredStyle: preferredStyle, interests: interestsArray };
+            setStudentProfile(currentUserId, currentStudentId, newProfile);
+            
+            hideEditProfileModal();
+        }
+
+        // --- Lógica de Base de Datos y Progreso (Ajustada a studentId) ---
+
+        function setupDataListener() {
+            if (!currentStudentId) return;
+
+            onSnapshot(progressDocRef(currentStudentId), (docSnapshot) => {
+                if (docSnapshot.exists()) {
+                    const data = docSnapshot.data();
+                    renderTracker(data);
+                    
+                    if (currentSubjectIndex !== -1 && data.subjects[currentSubjectIndex]) {
+                        renderSyllabus(data.subjects[currentSubjectIndex], currentSubjectIndex);
+                    }
+                } else {
+                    if (!isGuestMode) { 
+                        const initialData = {
+                            subjects: DEFAULT_SUBJECTS,
+                            casProjects: [],
+                            eeStatus: 'No Iniciada',
+                            eeGrade: 'N/A',
+                            tokEssay: 'Pendiente',
+                            tokPresentation: 'Pendiente'
+                        };
+                        setDoc(progressDocRef(currentStudentId), initialData).catch(e => showMessage("Error al inicializar datos.", true));
+                        renderTracker(initialData);
+                    } else {
+                        renderTracker({ subjects: DEFAULT_SUBJECTS, casProjects: [], eeStatus: 'N/A', eeGrade: 'N/A', tokEssay: 'N/A', tokPresentation: 'N/A' });
+                    }
+                }
+
+                if(isGuestMode) applyGuestRestrictions(); 
+            }, (error) => {
+                console.error("Error al obtener los datos:", error);
+                showMessage("Error al cargar los datos del tracker.", true);
+            });
+        }
+        
+        async function saveData(newData) {
+            if (isGuestMode) {
+                showMessage("Error: No puedes guardar cambios en modo invitado (Solo Lectura).", true);
+                return;
+            }
+            if (!currentStudentId) return;
+
+            try {
+                await setDoc(progressDocRef(currentStudentId), newData, { merge: true });
+            } catch (error) {
+                console.error("Error al guardar los datos:", error);
+                showMessage("Error al guardar el progreso.", true);
+            }
+        }
+
+        // --- Lógica de Renderizado y UI ---
+        
+        function getGeneralTrafficLight(syllabus) {
+            if (!syllabus || syllabus.length === 0) return TRAFFIC_LIGHTS.default;
+
+            const totalValue = syllabus.reduce((sum, topic) => {
+                const status = topic.status || 'default';
+                return sum + (TRAFFIC_LIGHTS[status] ? TRAFFIC_LIGHTS[status].value : 0);
+            }, 0);
+
+            const averageScore = totalValue / syllabus.length;
+
+            if (averageScore >= 2.5) return TRAFFIC_LIGHTS.green; 
+            if (averageScore >= 1.5) return TRAFFIC_LIGHTS.yellow; 
+            if (averageScore > 0) return TRAFFIC_LIGHTS.red; 
+            return TRAFFIC_LIGHTS.default; 
+        }
+
+        function renderTracker(data) {
+            renderSubjects(data.subjects);
+            renderCAS(data.casProjects);
+            renderCore(data.eeStatus, data.eeGrade, data.tokEssay, data.tokPresentation);
+        }
+
+        function renderSubjects(subjects) {
+            const list = document.getElementById('subjects-list');
+            list.innerHTML = '';
+            
+            subjects.forEach((subject, index) => {
+                const generalStatus = getGeneralTrafficLight(subject.syllabus);
+                const isSyllabusLoaded = subject.syllabus && subject.syllabus.length > 0;
+
+                const div = document.createElement('div');
+                // Clases de modo oscuro
+                div.className = 'flex flex-col md:flex-row items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600';
+                
+                const lightSpan = document.createElement('span');
+                lightSpan.className = `traffic-light ${generalStatus.class} shrink-0`;
+                lightSpan.title = `Dominio General: ${generalStatus.label}`;
+
+                const nameInput = document.createElement('input');
+                nameInput.type = 'text';
+                nameInput.value = subject.name || `Asignatura ${index + 1}`;
+                // Clases de modo oscuro para input
+                nameInput.className = 'flex-grow p-2 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 min-w-40 dark:bg-gray-600 dark:text-gray-100';
+                nameInput.onchange = (e) => updateSubjectData(index, 'name', e.target.value);
+
+                const gradeSelect = document.createElement('select');
+                // Clases de modo oscuro para select
+                gradeSelect.className = 'w-20 p-2 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-600 dark:text-gray-100 focus:ring-indigo-500 focus:border-indigo-500';
+                for (let i = 7; i >= 1; i--) {
+                    const option = document.createElement('option');
+                    option.value = i;
+                    option.textContent = i;
+                    if (subject.grade == i) {
+                        option.selected = true;
+                    }
+                    gradeSelect.appendChild(option);
+                }
+                const naOption = document.createElement('option');
+                naOption.value = '';
+                naOption.textContent = 'N/A';
+                if (!subject.grade) { naOption.selected = true; }
+                gradeSelect.appendChild(naOption);
+                
+                gradeSelect.onchange = (e) => updateSubjectData(index, 'grade', e.target.value ? parseInt(e.target.value) : null);
+
+                const levelSpan = document.createElement('span');
+                levelSpan.textContent = subject.level;
+                levelSpan.className = `font-semibold text-sm px-2 py-1 rounded-full ${subject.level === 'HL' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'} shrink-0`;
+
+                const planButton = document.createElement('button');
+                planButton.textContent = isSyllabusLoaded ? 'Ver Temario' : 'Generar Temario';
+                planButton.className = 'bg-blue-500 text-white px-4 py-2 rounded-xl hover:bg-blue-600 transition duration-150 text-sm shrink-0';
+                planButton.onclick = () => isSyllabusLoaded ? renderSyllabus(subject, index) : generateStudyPlan(subject.name, subject.level, index);
+
+
+                div.appendChild(lightSpan);
+                div.appendChild(nameInput);
+                div.appendChild(levelSpan);
+                div.appendChild(gradeSelect);
+                div.appendChild(planButton);
+                list.appendChild(div);
+            });
+            
+            const total = subjects.reduce((sum, s) => sum + (s.grade || 0), 0);
+            const avg = subjects.filter(s => s.grade !== null).length > 0
+                ? (total / subjects.filter(s => s.grade !== null).length).toFixed(1)
+                : 'N/A';
+
+            if (!document.getElementById('total-grades')) {
+                 const summaryDiv = document.createElement('div');
+                 summaryDiv.id = 'total-grades';
+                 // Clases de modo oscuro para el resumen
+                 summaryDiv.className = 'mt-4 p-3 bg-indigo-50 dark:bg-indigo-900 rounded-xl font-bold text-gray-700 dark:text-gray-100';
+                 list.parentNode.appendChild(summaryDiv);
+            }
+            document.getElementById('total-grades').innerHTML = `
+                <p>Suma total de puntos: <span class="text-indigo-600 dark:text-indigo-300">${total}</span></p>
+                <p>Promedio: <span class="text-indigo-600 dark:text-indigo-300">${avg}</span></p>
+            `;
+
+            if (isGuestMode) applyGuestRestrictions(); 
+        }
+        
+        function renderSyllabus(subject, index) {
+            currentSubjectIndex = index;
+            const planOutputDiv = document.getElementById('study-plan-output');
+            const planContentDiv = document.getElementById('plan-content');
+            const planLoadingDiv = document.getElementById('plan-loading');
+            const planSourcesDiv = document.getElementById('plan-sources');
+            
+            planOutputDiv.classList.remove('hidden');
+            planLoadingDiv.classList.add('hidden');
+            planContentDiv.innerHTML = '';
+            planSourcesDiv.innerHTML = '';
+
+            document.getElementById('current-subject-title').textContent = `${subject.name} ${subject.level}`;
+
+            if (!subject.syllabus || subject.syllabus.length === 0) {
+                 planContentDiv.innerHTML = '<p class="text-gray-500 italic dark:text-gray-400">Haz clic en "Generar Temario" para cargar el plan de estudios.</p>';
+                 return;
+            }
+
+            subject.syllabus.forEach((topic, topicIndex) => {
+                const statusKey = topic.status || 'default';
+                const statusInfo = TRAFFIC_LIGHTS[statusKey];
+
+                const topicDiv = document.createElement('div');
+                // Clases de modo oscuro para la tarjeta de tema
+                topicDiv.className = 'bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700';
+                
+                const header = document.createElement('div');
+                header.className = 'flex flex-col md:flex-row items-start md:items-center justify-between gap-2 cursor-pointer';
+                header.onclick = () => toggleTopicBody(topicDiv, topicIndex);
+                
+                const title = document.createElement('h4');
+                // Clases de modo oscuro para el título
+                title.className = 'font-semibold text-gray-800 dark:text-gray-100 text-lg flex items-center flex-grow';
+                title.innerHTML = `<span id="light-${index}-${topicIndex}" class="traffic-light ${statusInfo.class} mr-3 shrink-0"></span>${topic.name}`;
+
+                const statusSelect = document.createElement('select');
+                // Clases de modo oscuro para el selector de semáforo
+                statusSelect.className = 'p-2 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-600 dark:text-gray-100 text-sm shrink-0';
+                
+                Object.keys(TRAFFIC_LIGHTS).filter(k => k !== 'default').forEach(key => {
+                    const option = document.createElement('option');
+                    option.value = key;
+                    option.textContent = TRAFFIC_LIGHTS[key].label;
+                    if (statusKey === key) { option.selected = true; }
+                    statusSelect.appendChild(option);
+                });
+                
+                statusSelect.onchange = (e) => updateTopicStatus(index, topicIndex, e.target.value);
+
+                header.appendChild(title);
+                header.appendChild(statusSelect);
+                topicDiv.appendChild(header);
+
+                // BODY START
+                const body = document.createElement('div');
+                body.id = `topic-body-${index}-${topicIndex}`;
+                body.className = 'mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 hidden'; 
+
+                // 1. Notas Personales
+                const notesLabel = document.createElement('label');
+                notesLabel.className = 'block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1';
+                notesLabel.textContent = 'Notas Personales / Resumen:';
+
+                const notesTextarea = document.createElement('textarea');
+                // Clases de modo oscuro para textarea
+                notesTextarea.className = 'w-full p-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-blue-500 focus:border-blue-500 text-sm dark:bg-gray-700 dark:text-gray-100';
+                notesTextarea.rows = 3;
+                notesTextarea.value = topic.notes || '';
+                
+                let timeout;
+                notesTextarea.oninput = () => {
+                    clearTimeout(timeout);
+                    timeout = setTimeout(() => updateTopicNotes(index, topicIndex, notesTextarea.value), 1500);
+                };
+
+                // 2. Botón Study Booster
+                const boosterButton = document.createElement('button');
+                boosterButton.textContent = `Generar Preguntas de Repaso Personalizadas (${currentStudentProfile.preferredStyle}) ✨`;
+                boosterButton.className = 'mt-2 mb-4 bg-purple-600 text-white p-3 rounded-xl hover:bg-purple-700 transition duration-150 text-sm font-semibold w-full';
+                boosterButton.onclick = () => generateStudyContent(index, topicIndex, subject.name, subject.level, notesTextarea.value);
+
+                // 3. Área de Resultados del Booster
+                const studyOutputDiv = document.createElement('div');
+                studyOutputDiv.id = `study-content-output-${index}-${topicIndex}`;
+                // Clases de modo oscuro para el área de resultados IA
+                studyOutputDiv.className = 'mt-3 p-4 bg-purple-100 dark:bg-purple-900 text-gray-700 dark:text-gray-100 rounded-xl border border-purple-300 dark:border-purple-700';
+                studyOutputDiv.innerHTML = '<p class="text-gray-500 italic dark:text-gray-400">Haz clic en el botón de arriba para obtener preguntas adaptadas a tu estilo de aprendizaje.</p>';
+
+                body.appendChild(notesLabel);
+                body.appendChild(notesTextarea);
+                body.appendChild(boosterButton);
+                body.appendChild(studyOutputDiv);
+
+                topicDiv.appendChild(body);
+                // BODY END
+                
+                planContentDiv.appendChild(topicDiv);
+            });
+
+            if (subject.sources && subject.sources.length > 0) {
+                 planSourcesDiv.innerHTML = `
+                    <p class="text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">Fuentes del Temario:</p>
+                    <ul class="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                        ${subject.sources.map(source => `<li><a href="${source.uri}" target="_blank" class="hover:underline">${source.title || source.uri}</a></li>`).join('')}
+                    </ul>
+                 `;
+            }
+
+            if (isGuestMode) applyGuestRestrictions(); 
+        }
+        
+        function toggleTopicBody(topicDiv, topicIndex) {
+            const body = topicDiv.querySelector(`#topic-body-${currentSubjectIndex}-${topicIndex}`);
+            if (body) {
+                body.classList.toggle('hidden');
+            }
+        }
+        
+        // --- Funciones de manejo de datos (sin cambios) ---
+
+        window.updateTopicStatus = async (subjectIndex, topicIndex, newStatus) => {
+            if (isGuestMode) { showMessage("Error: No puedes guardar cambios en modo invitado.", true); return; }
+            try {
+                const docSnapshot = await getDoc(progressDocRef(currentStudentId));
+                if (docSnapshot.exists()) {
+                    const data = docSnapshot.data();
+                    let subjects = data.subjects;
+                    if (subjects[subjectIndex] && subjects[subjectIndex].syllabus[topicIndex]) {
+                        subjects[subjectIndex].syllabus[topicIndex].status = newStatus;
+                        await saveData({ subjects: subjects });
+                        showMessage(`Estado de ${subjects[subjectIndex].syllabus[topicIndex].name} actualizado a ${TRAFFIC_LIGHTS[newStatus].label}.`);
+                    }
+                }
+            } catch (e) {
+                console.error("Error updating topic status:", e);
+                showMessage("Error al actualizar el estado del tema.", true);
+            }
+        }
+
+        window.updateTopicNotes = async (subjectIndex, topicIndex, newNotes) => {
+            if (isGuestMode) { showMessage("Error: No puedes guardar cambios en modo invitado.", true); return; }
+            try {
+                const docSnapshot = await getDoc(progressDocRef(currentStudentId));
+                if (docSnapshot.exists()) {
+                    const data = docSnapshot.data();
+                    let subjects = data.subjects;
+                    if (subjects[subjectIndex] && subjects[subjectIndex].syllabus[topicIndex]) {
+                        subjects[subjectIndex].syllabus[topicIndex].notes = newNotes;
+                        await saveData({ subjects: subjects });
+                    }
+                }
+            } catch (e) {
+                console.error("Error updating topic notes:", e);
+                showMessage("Error al guardar las notas.", true);
+            }
+        }
+        
+        window.updateSubjectData = async (index, field, value) => {
+            if (isGuestMode) { showMessage("Error: No puedes guardar cambios en modo invitado.", true); return; }
+            try {
+                const docSnapshot = await getDoc(progressDocRef(currentStudentId));
+                if (docSnapshot.exists()) {
+                    const data = docSnapshot.data();
+                    let subjects = data.subjects || DEFAULT_SUBJECTS;
+                    if (subjects[index]) {
+                        subjects[index][field] = value;
+                        await saveData({ subjects: subjects });
+                    }
+                }
+            } catch (e) {
+                console.error("Error updating subject:", e);
+            }
+        }
+        
+        document.getElementById('add-cas-form').onsubmit = async (e) => {
+            e.preventDefault();
+            if (isGuestMode) { showMessage("Error: No puedes guardar cambios en modo invitado.", true); return; }
+            const name = document.getElementById('cas-name').value.trim();
+            const area = document.getElementById('cas-area').value;
+            
+            if (!name) return;
+
+            try {
+                const docSnapshot = await getDoc(progressDocRef(currentStudentId));
+                let projects = [];
+                if (docSnapshot.exists()) {
+                    projects = docSnapshot.data().casProjects || [];
+                }
+                
+                const newProject = { name: name, area: area, hours: 0 };
+                projects.push(newProject);
+                
+                await saveData({ casProjects: projects });
+                document.getElementById('cas-name').value = ''; 
+                showMessage("Proyecto CAS añadido.");
+
+            } catch (error) {
+                console.error("Error adding CAS project:", error);
+                showMessage("No se pudo añadir el proyecto CAS.", true);
+            }
+        };
+
+        window.updateCASHours = async (index, hours) => {
+            if (isGuestMode) { showMessage("Error: No puedes guardar cambios en modo invitado.", true); return; }
+            try {
+                const docSnapshot = await getDoc(progressDocRef(currentStudentId));
+                if (docSnapshot.exists()) {
+                    const data = docSnapshot.data();
+                    let projects = data.casProjects || [];
+                    if (projects[index]) {
+                        projects[index].hours = parseInt(hours) || 0;
+                        await saveData({ casProjects: projects });
+                    }
+                }
+            } catch (e) {
+                console.error("Error updating CAS hours:", e);
+            }
+        };
+        
+        window.deleteCASProject = async (index) => {
+             if (isGuestMode) { showMessage("Error: No puedes guardar cambios en modo invitado.", true); return; }
+             showMessage("Eliminando proyecto CAS. Si esto fue un error, añádelo de nuevo.", false);
+            
+            try {
+                const docSnapshot = await getDoc(progressDocRef(currentStudentId));
+                if (docSnapshot.exists()) {
+                    let projects = docSnapshot.data().casProjects || [];
+                    projects.splice(index, 1);
+                    await saveData({ casProjects: projects });
+                    showMessage("Proyecto CAS eliminado.", false);
+                }
+            } catch (e) {
+                console.error("Error deleting CAS project:", e);
+                showMessage("Error al eliminar el proyecto CAS.", true);
+            }
+        };
+
+        window.updateCoreStatus = async (field, value) => {
+            if (isGuestMode) { showMessage("Error: No puedes guardar cambios en modo invitado.", true); return; }
+            if (field === 'eeStatus' && value !== 'Evaluada') {
+                await saveData({ [field]: value, eeGrade: 'N/A' });
+            } else {
+                await saveData({ [field]: value });
+            }
+        };
+
+        
+        // --- Lógica de Generación de Plan (Gemini API) ---
+        
+        const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=";
+        const apiKey = ""; 
+        const MAX_RETRIES = 5;
+
+        async function callGeminiAPI(query, systemPrompt) {
+             const apiUrl = `${API_URL}${apiKey}`;
+            const payload = {
+                contents: [{ parts: [{ text: query }] }],
+                tools: [{ "google_search": {} }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+            };
+
+            for (let i = 0; i < MAX_RETRIES; i++) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.status === 429 && i < MAX_RETRIES - 1) {
+                        const delay = Math.pow(2, i) * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        continue;
+                    }
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    const candidate = result.candidates?.[0];
+
+                    if (candidate && candidate.content?.parts?.[0]?.text) {
+                        const text = candidate.content.parts[0].text;
+                        let sources = [];
+                        const groundingMetadata = candidate.groundingMetadata;
+                        if (groundingMetadata && groundingMetadata.groundingAttributions) {
+                            sources = groundingMetadata.groundingAttributions
+                                .map(attribution => ({
+                                    uri: attribution.web?.uri,
+                                    title: attribution.web?.title,
+                                }))
+                                .filter(source => source.uri && source.title);
+                        }
+                        return { text, sources };
+                    } else {
+                        throw new Error("Respuesta del API incompleta o vacía.");
+                    }
+
+                } catch (error) {
+                    if (i === MAX_RETRIES - 1) {
+                        console.error("Error final en la llamada a Gemini API:", error);
+                        throw new Error("No se pudo contactar al servicio de inteligencia. Inténtalo de nuevo.");
+                    }
+                    const delay = Math.pow(2, i) * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+        
+        // FEATURE 1: Generar Temario 
+        window.generateStudyPlan = async (subjectName, subjectLevel, subjectIndex) => {
+             if (isGuestMode) { showMessage("Error: La generación de temario avanzado está deshabilitada en modo invitado para evitar sobrecarga de API. Únete para usar todas las funciones.", true); return; }
+
+
+            const planOutputDiv = document.getElementById('study-plan-output');
+            const planContentDiv = document.getElementById('plan-content');
+            const planLoadingDiv = document.getElementById('plan-loading');
+            
+            planContentDiv.innerHTML = '';
+            planOutputDiv.classList.remove('hidden');
+            planLoadingDiv.classList.remove('hidden');
+            document.getElementById('current-subject-title').textContent = `${subjectName} ${subjectLevel}`;
+            
+            const fullSubjectName = `${subjectName} Nivel ${subjectLevel}`;
+
+            const systemPrompt = "Actúa como un experto en el currículo del Bachillerato Internacional (IB). Proporciona solo una lista ordenada y concisa de los 8 a 15 TEMAS O UNIDADES principales del plan de estudios para la asignatura IB especificada. El resultado DEBE ser una lista Markdown sin números ni títulos de encabezado. NO incluyas fechas, detalles de evaluación o introducciones/conclusiones. Solo la lista de temas.";
+            const userQuery = `Temas principales para ${fullSubjectName} del IB.`;
+            
+            try {
+                const { text, sources } = await callGeminiAPI(userQuery, systemPrompt);
+                
+                planLoadingDiv.classList.add('hidden');
+                
+                const rawTopics = text.split('\n')
+                    .map(line => line.replace(/^-?\s*/, '').trim()) 
+                    .filter(line => line.length > 0);
+
+                if (rawTopics.length === 0) {
+                     planContentDiv.innerHTML = `<p class="text-red-500 font-semibold">El temario generado está vacío. Inténtalo de nuevo con un nombre de asignatura más específico.</p>`;
+                     return;
+                }
+
+                const newSyllabus = rawTopics.map(topicName => ({
+                    name: topicName,
+                    status: 'default', 
+                    notes: ''
+                }));
+                
+                const docSnapshot = await getDoc(progressDocRef(currentStudentId));
+                if (docSnapshot.exists()) {
+                    const data = docSnapshot.data();
+                    let subjects = data.subjects;
+                    if (subjects[subjectIndex]) {
+                        subjects[subjectIndex].syllabus = newSyllabus;
+                        subjects[subjectIndex].sources = sources; 
+                        await saveData({ subjects: subjects });
+                        
+                        renderSyllabus(subjects[subjectIndex], subjectIndex);
+                        showMessage(`Temario para ${fullSubjectName} generado y guardado.`);
+                    }
+                }
+
+            } catch (error) {
+                planLoadingDiv.classList.add('hidden');
+                planContentDiv.innerHTML = `<p class="text-red-500 font-semibold">Error al generar el plan de estudio: ${error.message}. Por favor, inténtalo de nuevo.</p>`;
+            }
+        };
+
+        // FEATURE 2: Generar Preguntas de Repaso (AHORA PERSONALIZADO)
+        window.generateStudyContent = async (subjectIndex, topicIndex, subjectName, subjectLevel, topicNotes) => {
+            const outputDiv = document.getElementById(`study-content-output-${subjectIndex}-${topicIndex}`);
+            
+            if (topicNotes.trim().length < 20) {
+                outputDiv.innerHTML = '<p class="text-red-500 font-semibold">Necesitas ingresar al menos 20 caracteres de notas personales para generar preguntas útiles.</p>';
+                return;
+            }
+
+            outputDiv.innerHTML = `<div class="flex items-center"><div class="loading-spinner mr-2"></div><span>Analizando notas y personalizando...</span></div>`;
+
+            const topicName = document.getElementById(`topic-body-${subjectIndex}-${topicIndex}`).parentNode.querySelector('h4').textContent.replace(TRAFFIC_LIGHTS['default'].label, '').trim(); 
+            
+            const profile = currentStudentProfile || DEFAULT_PROFILE;
+            const preferredStyle = profile.preferredStyle;
+            const interests = profile.interests.join(', ') || 'ninguna afición o hobby';
+
+            // El prompt ahora incluye la personalización basada en el perfil
+            const systemPrompt = `Eres un tutor experto del Bachillerato Internacional (IB). Tu tarea es analizar las "Notas Personales" que te proporciona un estudiante. Basado SÓLO en esas notas, genera 3 a 5 preguntas de prueba. El formato debe ser una lista numerada de preguntas. El estudiante tiene un estilo de aprendizaje **${preferredStyle}** y sus intereses son **${interests}**. Adapta la TAREA/PREGUNTA a su estilo: si es Visual, pide diagramas; si es Kinestésico, pide un experimento o analogía práctica. Si es posible, contextualiza la pregunta con sus intereses.`;
+            
+            const userQuery = `Materia: ${subjectName} ${subjectLevel}. Tema: ${topicName}.\n\nNotas Personales del Estudiante:\n\n${topicNotes}`;
+            
+            try {
+                const { text } = await callGeminiAPI(userQuery, systemPrompt);
+                
+                outputDiv.innerHTML = `<div class="bg-purple-50 dark:bg-purple-900 p-3 rounded-xl"><h5 class="font-bold text-purple-700 dark:text-purple-300 mb-2">Preguntas de Repaso Personalizado (${preferredStyle}):</h5>${text.replace(/\n/g, '<br>')}</div>`;
+                showMessage("Preguntas de repaso generadas con éxito. ¡A estudiar!");
+
+            } catch (error) {
+                outputDiv.innerHTML = `<p class="text-red-500 font-semibold">Error IA: No se pudieron generar las preguntas. Asegúrate de que las notas sean coherentes.</p>`;
+                console.error("Error generating study content:", error);
+            }
+        };
+
+        
+        initializeFirebase();
+    </script>
+</body>
+</html>
