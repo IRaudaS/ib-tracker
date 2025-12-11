@@ -1,0 +1,36 @@
+name: Deploy to Firebase Hosting (Automatic)
+
+on:
+  push:
+    branches:
+      - main  # Esta acción se ejecuta cuando subes código a la rama principal
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Necesario para que el action de hosting funcione correctamente
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      # Paso de Despliegue de Hosting
+      - name: Deploy to Firebase
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          # El token de GitHub para verificar que la acción es segura
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          
+          # La clave secreta que creaste en el paso 6.1 (el PAT)
+          # Esto le da los permisos de lectura/escritura a Firebase
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          
+          # El ID de tu proyecto Firebase
+          projectId: ib-tracker # ¡IMPORTANTE! Usar tu ID de proyecto
+          
+          # La carpeta que contiene tu index.html
+          channelId: live
+          target: public
